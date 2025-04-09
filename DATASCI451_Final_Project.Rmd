@@ -1,0 +1,144 @@
+---
+title: "DATASCI451_Final_Project"
+output: pdf_document
+date: "2025-04-08"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(rstan)
+```
+
+
+```{r}
+olympics <- read.csv('olympics2.csv')
+head(olympics)
+```
+
+```{r}
+medals_by_country <- olympics |>
+  group_by(NOC) |>
+  summarise(Total = sum(Total)) |>
+  arrange(desc(Total))
+
+head(medals_by_country)
+
+# Bar plot
+ggplot(medals_by_country, aes(x = reorder(NOC, -Total), y = Total)) +
+  geom_col(fill = "blue") +
+  labs(title = "Total Medals by Country", x = "Country")
+```
+```{r}
+olympics |>
+  group_by(Year) |>
+  summarise(Total = sum(Total)) |>
+  ggplot(aes(x = Year, y = Total)) +
+  geom_line() +
+  labs(title = "Global Medal Trend Over Time")
+
+
+olympics |>
+  filter(NOC == "AUS") |>
+  ggplot(aes(x = Year, y = Total)) +
+  geom_line() +
+  labs(title = "Australia's Medal Trend")
+```
+```{r}
+olympics |>
+  group_by(IsHost) |>
+  summarise(Avg_Total = mean(Total)) |>
+  ggplot(aes(x = factor(IsHost), y = Avg_Total)) +
+  geom_col() +
+  labs(title = "Host vs Non-Host medals", x = "Host? (0=No, 1=Yes)")
+```
+```{r}
+olympics |>
+  group_by(NOC) |>
+  summarise(Gold = sum(Gold), Silver = sum(Silver), Bronze = sum(Bronze)) |>
+  tidyr::pivot_longer(cols = c(Gold, Silver, Bronze)) |>
+  ggplot(aes(x = reorder(NOC, -value), y = value, fill = name)) +
+  geom_col() +
+  labs(title = "Medal Type Distribution by Country", x = "Country")
+```
+```{r}
+ggplot(olympics, aes(x = X.Athletes, y = Total)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Athletes vs Total Medals")
+
+cor(olympics$X.Athletes, olympics$Total, use = "complete.obs")
+```
+```{r}
+# Histogram for each # events, 
+
+hist(olympics$X.Events)
+
+
+```
+```{r}
+hist(olympics$X.Athletes)
+```
+```{r}
+hist(olympics$Total)
+```
+```{r}
+data_list <- list(N = nrow(olympics), 
+             Year = olympics$Year,
+             Total = olympics$Total,
+             N_events = olympics$X.Events,
+             N_athletes = olympics$X.Athletes,
+             N_countries = 5, 
+             Idx_countries = olympics$Country,
+             IsHost = olympics$IsHost)
+```
+
+
+```{r}
+stan_model_code <- "
+data {
+  int<lower=0> N;
+  vector[N] Year;
+  int<lower=0> Total[N];
+  int<lower=0> N_events[N];
+  int<lower=0> N_athletes[N];
+  int<lower=0> N_countries;
+  int<lower=0, upper=N_countries> Idx_countries[N];
+  int<lower=0, upper=1> IsHost[N];
+}
+parameters {
+  array[N_countries] real<lower=0> lambda;
+  array[N_countries] real<lower=0> alpha;
+  array[N_countries] real<lower=0> beta_athlete;
+  array[N_countries] real<lower=0> beta_event;
+  array[N_countries] real<lower=0> beta_host;
+}
+model {
+  alpha ~ normal(0,1)
+  beta_event ~ normal(0,1)
+  beta_athlete ~ normal(0,1)
+  beta_host ~ normal(0,1)
+  for (n in 1:N) {
+    lambda[n] ~ 
+  }
+}
+"
+```
+
+```{r}
+model = stan_model(model_code = stan_model_code)
+
+fit <- sampling(object = model, 
+            data = data_list, 
+            iter = 12000,
+            warmup = 2000, 
+            seed = 123,
+            chains = 1)
+```
+
+
+

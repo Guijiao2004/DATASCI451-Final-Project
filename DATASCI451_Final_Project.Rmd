@@ -98,6 +98,7 @@ data_list <- list(N = nrow(olympics),
 ```
 
 
+
 ```{r}
 stan_model_code <- "
 data {
@@ -107,27 +108,40 @@ data {
   int<lower=0> N_events[N];
   int<lower=0> N_athletes[N];
   int<lower=0> N_countries;
-  int<lower=0, upper=N_countries> Idx_countries[N];
+  int<lower=1, upper=N_countries> Idx_countries[N];
   int<lower=0, upper=1> IsHost[N];
 }
 parameters {
-  array[N_countries] real<lower=0> lambda;
-  array[N_countries] real<lower=0> alpha;
-  array[N_countries] real<lower=0> beta_athlete;
-  array[N_countries] real<lower=0> beta_event;
-  array[N_countries] real<lower=0> beta_host;
+  vector[N_countries] alpha;
+  vector[N_countries] beta_athlete;
+  vector[N_countries] beta_event;
+  vector[N_countries] beta_host;
+  real beta_year;
+}
+transformed parameters {
+  vector[N] lambda;
+  for (n in 1:N) {
+    int c = Idx_countries[n];
+    lambda[n] = alpha[c] 
+                + beta_athlete[c] * N_athletes[n] 
+                + beta_event[c] * N_events[n] 
+                + beta_host[c] * IsHost[n]
+                + beta_year * Year[n];
+  }
 }
 model {
-  alpha ~ normal(0,1)
-  beta_event ~ normal(0,1)
-  beta_athlete ~ normal(0,1)
-  beta_host ~ normal(0,1)
-  for (n in 1:N) {
-    lambda[n] ~ 
-  }
+  alpha ~ normal(0, 3);               
+  beta_athlete ~ normal(0, 1);       
+  beta_event ~ normal(0, 1);          
+  beta_host ~ normal(0, 1);
+  beta_year ~ normal(0, 1);  
+  
+  Total ~ poisson_log(lambda);
 }
 "
 ```
+
+
 
 ```{r}
 model = stan_model(model_code = stan_model_code)
@@ -140,5 +154,8 @@ fit <- sampling(object = model,
             chains = 1)
 ```
 
+```{r}
+fit
+```
 
 

@@ -16,8 +16,11 @@ library(rstan)
 
 
 ```{r}
-olympics <- read.csv('olympics2.csv')
+olympics <- read.csv('01_data_preprocessing/data/olympics.csv')
 head(olympics)
+
+olympics$log_X.Athletes <- log(olympics$X.Athletes + 1)
+olympics$log_X.Events <- log(olympics$X.Events + 1)
 ```
 
 ```{r}
@@ -86,61 +89,79 @@ hist(olympics$X.Athletes)
 ```{r}
 hist(olympics$Total)
 ```
-```{r}
-data_list <- list(N = nrow(olympics), 
-             Year = olympics$Year,
-             Total = olympics$Total,
-             N_events = olympics$X.Events,
-             N_athletes = olympics$X.Athletes,
-             N_countries = 5, 
-             Idx_countries = olympics$Country,
-             IsHost = olympics$IsHost)
-```
-
-
-
+$$
+\text{Total}_{c, y}\sim\text{Poisson}(\lambda_{c, y})
+$$
+$$
+\log(\lambda_{c, y}) = \alpha_c + \beta_0 + \beta_1\text{X.Athletes}_{c, y} + \beta_2\text{X.Events}_{c, y} + \beta_3\text{IsHost}_{c, y} + \beta_4\text{Year}_{c, y}
+$$
+$$
+\alpha_c \sim N(0, \sigma_{\alpha}^2) \\
+\beta_i \sim N(0, \sigma_{i}^2) \text{ for } i = 0, 1, 2, 3, 4
+$$
 ```{r}
 stan_model_code <- "
 data {
-  int<lower=0> N;
-  vector[N] Year;
-  int<lower=0> Total[N];
-  int<lower=0> N_events[N];
-  int<lower=0> N_athletes[N];
-  int<lower=0> N_countries;
-  int<lower=1, upper=N_countries> Idx_countries[N];
-  int<lower=0, upper=1> IsHost[N];
+  int<lower=0> N; // number of observations
+  int<lower=0> C; // number of countries
+  int<lower=0> Y; // number of years
+  array[C, Y] int<lower=0> Total; // total medals
+  array[C, Y] real<lower=0> N_athletes; // number of athletes
+  array[C, Y] real<lower=0> N_events; // number of events
+  array[C, Y] int<lower=0, upper=1> IsHost; // host country
 }
 parameters {
-  vector[N_countries] alpha;
-  vector[N_countries] beta_athlete;
-  vector[N_countries] beta_event;
-  vector[N_countries] beta_host;
-  real beta_year;
-}
-transformed parameters {
-  vector[N] lambda;
-  for (n in 1:N) {
-    int c = Idx_countries[n];
-    lambda[n] = alpha[c] 
-                + beta_athlete[c] * N_athletes[n] 
-                + beta_event[c] * N_events[n] 
-                + beta_host[c] * IsHost[n]
-                + beta_year * Year[n];
-  }
+  array[C] real alpha; // country-specific intercepts
+  array[5] real beta; // coefficients for predictors
 }
 model {
-  alpha ~ normal(0, 3);               
-  beta_athlete ~ normal(0, 1);       
-  beta_event ~ normal(0, 1);          
-  beta_host ~ normal(0, 1);
-  beta_year ~ normal(0, 1);  
+  for (c in 1:C) {
+    for (y in 1:Y) {
+      Total[c, y] ~ poisson_log(alpha[c] + beta[1] + beta[2] * N_athletes[c, y] + beta[3] * N_events[c, y] + beta[4] * IsHost[c, y]);
+    }
+  }
   
-  Total ~ poisson_log(lambda);
+  // Priors
+  alpha ~ normal(0, 1);
+  for (i in 1:5) {
+    beta[i] ~ normal(0, 1);
+  }
 }
+
 "
 ```
 
+```{r}
+N = nrow(olympics)
+C = length(unique(olympics$NOC))
+Y = max(olympics$Year)
+Total = matrix(0, nrow = C, ncol = Y)
+N_athletes = matrix(0, nrow = C, ncol = Y)
+N_events = matrix(0, nrow = C, ncol = Y)
+IsHost = matrix(0, nrow = C, ncol = Y)
+for (i in 1:C) {
+  country_data = olympics[olympics$Country == i, ]
+  for (j in 1:Y) {
+    year_data = country_data[country_data$Year == j, ]
+    if (nrow(year_data) > 0) {
+      Total[i, j] = year_data$Total
+      N_athletes[i, j] = year_data$log_X.Athletes
+      N_events[i, j] = year_data$log_X.Events
+      IsHost[i, j] = year_data$IsHost
+    }
+  }
+}
+
+data_list = list(
+  N = N,
+  C = C,
+  Y = Y,
+  Total = Total,
+  N_athletes = N_athletes,
+  N_events = N_events,
+  IsHost = IsHost
+)
+```
 
 
 ```{r}
@@ -148,14 +169,64 @@ model = stan_model(model_code = stan_model_code)
 
 fit <- sampling(object = model, 
             data = data_list, 
-            iter = 12000,
+            iter = 10000,
             warmup = 2000, 
-            seed = 123,
-            chains = 1)
+            seed = 451)
 ```
 
 ```{r}
-fit
+plot(fit)
+```
+```{r}
+stan_trace(fit, nrow = 3, ncol = 4)
 ```
 
+```{r}
+stan_hist(fit)
+```
 
+```{r}
+# Summary of the model
+summary(fit)$summary
+```
+
+```{r}
+# Predict the number of medals for 2028
+new_data <- data.frame(
+  NOC = "USA",
+  Year = 34,
+  X.Athletes = 856, # How many athletes?
+  X.Events = 245, # How many events?
+  IsHost = 1,
+  Country = 1,
+  log_X.Athletes = log(856 + 1),
+  log_X.Events = log(245 + 1)
+)
+```
+
+```{r}
+# Extract posterior samples
+alpha_samples <- posterior_samples$alpha[, 1]    # vector of MCMC samples for alpha[c]
+beta_samples  <- posterior_samples$beta          # matrix: iterations × 4 (or list of vectors)
+
+# Calculate log(lambda)
+log_lambda <- alpha_samples +
+              beta_samples[,1] +
+              beta_samples[,2] * new_data$log_X.Athletes +
+              beta_samples[,3] * new_data$log_X.Events +
+              beta_samples[,4] * new_data$IsHost
+
+# Calculate lambda
+lambda_pred <- exp(log_lambda)
+
+# Generate predictions from Poisson distribution
+set.seed(451)  # for reproducibility
+total_pred <- rpois(length(lambda_pred), lambda_pred)
+```
+
+```{r}
+# Visualize predictions
+summary(total_pred)
+hist(lambda_pred)
+hist(total_pred)
+```

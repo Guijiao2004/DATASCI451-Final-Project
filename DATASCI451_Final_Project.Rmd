@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(ggplot2)
 library(rstan)
+options(mc.cores = 4)
 ```
 
 
@@ -88,12 +89,30 @@ hist(olympics$X.Athletes)
 ```
 ```{r}
 hist(olympics$Total)
+mean(olympics$Total)
+var(olympics$Total)
 ```
+```{r}
+hist(olympics$Gold)
+mean(olympics$Gold)
+var(olympics$Gold)
+```
+```{r}
+hist(olympics$Silver)
+mean(olympics$Silver)
+var(olympics$Silver)
+```
+```{r}
+hist(olympics$Bronze)
+mean(olympics$Bronze)
+var(olympics$Bronze)
+```
+
 $$
 \text{Total}_{c, y}\sim\text{Poisson}(\lambda_{c, y})
 $$
 $$
-\log(\lambda_{c, y}) = \alpha_c + \beta_0 + \beta_1\text{X.Athletes}_{c, y} + \beta_2\text{X.Events}_{c, y} + \beta_3\text{IsHost}_{c, y} + \beta_4\text{Year}_{c, y}
+\log(\lambda_{c, y}) = \alpha_c + \beta_0 + \beta_1\text{X.Athletes}_{c, y} + \beta_2\text{X.Events}_{c, y} + \beta_3\text{IsHost}_{c, y}
 $$
 $$
 \alpha_c \sim N(0, \sigma_{\alpha}^2) \\
@@ -112,19 +131,21 @@ data {
 }
 parameters {
   array[C] real alpha; // country-specific intercepts
-  array[5] real beta; // coefficients for predictors
+  array[4] real beta; // coefficients for predictors
+  real<lower=0> phi; // dispersion parameter
 }
 model {
   for (c in 1:C) {
     for (y in 1:Y) {
-      Total[c, y] ~ poisson_log(alpha[c] + beta[1] + beta[2] * N_athletes[c, y] + beta[3] * N_events[c, y] + beta[4] * IsHost[c, y]);
+      Total[c, y] ~ neg_binomial_2_log(alpha[c] + beta[1] + beta[2] * N_athletes[c, y] + beta[3] * N_events[c, y] + beta[4] * IsHost[c, y], phi);
     }
   }
   
   // Priors
-  alpha ~ normal(0, 1);
-  for (i in 1:5) {
-    beta[i] ~ normal(0, 1);
+  alpha ~ normal(0, 5);
+  phi ~ gamma(2, 0.1);
+  for (i in 1:4) {
+    beta[i] ~ normal(0, 5);
   }
 }
 
@@ -144,7 +165,7 @@ for (i in 1:C) {
   for (j in 1:Y) {
     year_data = country_data[country_data$Year == j, ]
     if (nrow(year_data) > 0) {
-      Total[i, j] = year_data$Total
+      Total[i, j] = year_data$Gold
       N_athletes[i, j] = year_data$log_X.Athletes
       N_events[i, j] = year_data$log_X.Events
       IsHost[i, j] = year_data$IsHost
@@ -206,8 +227,10 @@ new_data <- data.frame(
 
 ```{r}
 # Extract posterior samples
+posterior_samples <- extract(fit)
 alpha_samples <- posterior_samples$alpha[, 1]    # vector of MCMC samples for alpha[c]
 beta_samples  <- posterior_samples$beta          # matrix: iterations × 4 (or list of vectors)
+phi_samples   <- posterior_samples$phi     # vector of MCMC samples for phi
 
 # Calculate log(lambda)
 log_lambda <- alpha_samples +
@@ -221,7 +244,9 @@ lambda_pred <- exp(log_lambda)
 
 # Generate predictions from Poisson distribution
 set.seed(451)  # for reproducibility
-total_pred <- rpois(length(lambda_pred), lambda_pred)
+total_pred <- rnbinom(n = length(lambda_pred), 
+                       size = phi_samples, 
+                       mu = lambda_pred)
 ```
 
 ```{r}

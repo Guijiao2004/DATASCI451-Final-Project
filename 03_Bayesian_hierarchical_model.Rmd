@@ -25,34 +25,6 @@ olympics$log_X.Events <- log(olympics$X.Events + 1)
 ```
 
 ```{r}
-medals_by_country <- olympics |>
-  group_by(NOC) |>
-  summarise(Total = sum(Total)) |>
-  arrange(desc(Total))
-
-head(medals_by_country)
-
-# Bar plot
-ggplot(medals_by_country, aes(x = reorder(NOC, -Total), y = Total)) +
-  geom_col(fill = "blue") +
-  labs(title = "Total Medals by Country", x = "Country")
-```
-```{r}
-olympics |>
-  group_by(Year) |>
-  summarise(Total = sum(Total)) |>
-  ggplot(aes(x = Year, y = Total)) +
-  geom_line() +
-  labs(title = "Global Medal Trend Over Time")
-
-
-olympics |>
-  filter(NOC == "AUS") |>
-  ggplot(aes(x = Year, y = Total)) +
-  geom_line() +
-  labs(title = "Australia's Medal Trend")
-```
-```{r}
 olympics |>
   group_by(IsHost) |>
   summarise(Avg_Total = mean(Total)) |>
@@ -78,45 +50,69 @@ ggplot(olympics, aes(x = X.Athletes, y = Total)) +
 cor(olympics$X.Athletes, olympics$Total, use = "complete.obs")
 ```
 ```{r}
-# Histogram for each # events, 
-
+# Histograms for each variable
 hist(olympics$X.Events)
-
-
-```
-```{r}
 hist(olympics$X.Athletes)
 ```
 ```{r}
-hist(olympics$Total)
-mean(olympics$Total)
-var(olympics$Total)
+pdf("figures/histogram_total_medals.pdf", width = 8, height = 6)
+hist(olympics$Total, 
+     main = "Histogram of Total Medals", 
+     xlab = "Total Medals")
+text(x = max(olympics$Total) * 0.7, 
+     y = max(hist(olympics$Total, plot = FALSE)$counts * 0.8), 
+     labels = paste("Mean =", round(mean(olympics$Total), 2), 
+                    "\nVar =", round(var(olympics$Total), 2)),
+     col = "blue", cex = 0.9, adj = 0)
+dev.off()
 ```
 ```{r}
-hist(olympics$Gold)
-mean(olympics$Gold)
-var(olympics$Gold)
+pdf("figures/histogram_gold_medals.pdf", width = 8, height = 6)
+hist(olympics$Gold,
+     main = "Histogram of Gold Medals", 
+     xlab = "Gold Medals")
+text(x = max(olympics$Gold) * 0.7,
+     y = max(hist(olympics$Gold, plot = FALSE)$counts * 0.8), 
+     labels = paste("Mean =", round(mean(olympics$Gold), 2), 
+                    "\nVar =", round(var(olympics$Gold), 2)),
+     col = "blue", cex = 0.9, adj = 0)
+dev.off()
 ```
 ```{r}
-hist(olympics$Silver)
-mean(olympics$Silver)
-var(olympics$Silver)
+pdf("figures/histogram_silver_medals.pdf", width = 8, height = 6)
+hist(olympics$Silver,
+     main = "Histogram of Silver Medals", 
+     xlab = "Silver Medals")
+text(x = max(olympics$Silver) * 0.7,
+     y = max(hist(olympics$Silver, plot = FALSE)$counts * 0.8), 
+     labels = paste("Mean =", round(mean(olympics$Silver), 2), 
+                    "\nVar =", round(var(olympics$Silver), 2)),
+     col = "blue", cex = 0.9, adj = 0)
+dev.off()
 ```
 ```{r}
-hist(olympics$Bronze)
-mean(olympics$Bronze)
-var(olympics$Bronze)
+pdf("figures/histogram_bronze_medals.pdf", width = 8, height = 6)
+hist(olympics$Bronze,
+     main = "Histogram of Bronze Medals", 
+     xlab = "Bronze Medals")
+text(x = max(olympics$Bronze) * 0.7,
+     y = max(hist(olympics$Bronze, plot = FALSE)$counts * 0.8), 
+     labels = paste("Mean =", round(mean(olympics$Bronze), 2), 
+                    "\nVar =", round(var(olympics$Bronze), 2)),
+     col = "blue", cex = 0.9, adj = 0)
+dev.off()
 ```
 
 $$
-\text{Total}_{c, y}\sim\text{Poisson}(\lambda_{c, y})
+\text{Total}_{c, y}\sim\text{NegBinomial}(\lambda_{c, y}, \phi)
 $$
 $$
 \log(\lambda_{c, y}) = \alpha_c + \beta_0 + \beta_1\text{X.Athletes}_{c, y} + \beta_2\text{X.Events}_{c, y} + \beta_3\text{IsHost}_{c, y}
 $$
 $$
 \alpha_c \sim N(0, \sigma_{\alpha}^2) \\
-\beta_i \sim N(0, \sigma_{i}^2) \text{ for } i = 0, 1, 2, 3, 4
+\beta_i \sim N(0, \sigma_{i}^2) \text{ for } i = 0, 1, 2, 3, 4\\
+\phi \sim \text{Gamma}(2, 0.1) \\
 $$
 ```{r}
 stan_model_code <- "
@@ -156,7 +152,9 @@ model {
 N = nrow(olympics)
 C = length(unique(olympics$NOC))
 Y = max(olympics$Year)
-Total = matrix(0, nrow = C, ncol = Y)
+Gold = matrix(0, nrow = C, ncol = Y)
+Silver = matrix(0, nrow = C, ncol = Y)
+Bronze = matrix(0, nrow = C, ncol = Y)
 N_athletes = matrix(0, nrow = C, ncol = Y)
 N_events = matrix(0, nrow = C, ncol = Y)
 IsHost = matrix(0, nrow = C, ncol = Y)
@@ -165,7 +163,9 @@ for (i in 1:C) {
   for (j in 1:Y) {
     year_data = country_data[country_data$Year == j, ]
     if (nrow(year_data) > 0) {
-      Total[i, j] = year_data$Gold
+      Gold[i, j] = year_data$Gold
+      Silver[i, j] = year_data$Silver
+      Bronze[i, j] = year_data$Bronze
       N_athletes[i, j] = year_data$log_X.Athletes
       N_events[i, j] = year_data$log_X.Events
       IsHost[i, j] = year_data$IsHost
@@ -173,11 +173,31 @@ for (i in 1:C) {
   }
 }
 
-data_list = list(
+gold_data_list = list(
   N = N,
   C = C,
   Y = Y,
-  Total = Total,
+  Total = Gold,
+  N_athletes = N_athletes,
+  N_events = N_events,
+  IsHost = IsHost
+)
+
+silver_data_list = list(
+  N = N,
+  C = C,
+  Y = Y,
+  Total = Silver,
+  N_athletes = N_athletes,
+  N_events = N_events,
+  IsHost = IsHost
+)
+
+bronze_data_list = list(
+  N = N,
+  C = C,
+  Y = Y,
+  Total = Bronze,
   N_athletes = N_athletes,
   N_events = N_events,
   IsHost = IsHost
@@ -188,70 +208,226 @@ data_list = list(
 ```{r}
 model = stan_model(model_code = stan_model_code)
 
-fit <- sampling(object = model, 
-            data = data_list, 
+gold_fit <- sampling(object = model, 
+            data = gold_data_list, 
             iter = 10000,
             warmup = 2000, 
             seed = 451)
 ```
 
 ```{r}
-plot(fit)
-```
-```{r}
-stan_trace(fit, nrow = 3, ncol = 4)
-```
-
-```{r}
-stan_hist(fit)
+silver_fit <- sampling(object = model,
+            data = silver_data_list, 
+            iter = 10000,
+            warmup = 2000, 
+            seed = 451)
 ```
 
 ```{r}
-# Summary of the model
-summary(fit)$summary
+bronze_fit <- sampling(object = model,
+            data = bronze_data_list, 
+            iter = 10000,
+            warmup = 2000, 
+            seed = 451)
 ```
 
 ```{r}
-# Predict the number of medals for 2028
-new_data <- data.frame(
-  NOC = "USA",
-  Year = 34,
-  X.Athletes = 856, # How many athletes?
-  X.Events = 245, # How many events?
-  IsHost = 1,
-  Country = 1,
-  log_X.Athletes = log(856 + 1),
-  log_X.Events = log(245 + 1)
+# Analysis of the Gold Model
+pdf("figures/gold_model.pdf", width = 8, height = 6)
+plot(gold_fit)
+dev.off()
+
+pdf("figures/gold_model_trace.pdf", width = 8, height = 6)
+stan_trace(gold_fit, nrow = 3, ncol = 4)
+dev.off()
+
+pdf("figures/gold_model_hist.pdf", width = 8, height = 6)
+stan_hist(gold_fit)
+dev.off()
+
+summary(gold_fit)$summary
+```
+
+```{r}
+# Analysis of the Silver Model
+pdf("figures/silver_model.pdf", width = 8, height = 6)
+plot(silver_fit)
+dev.off()
+
+pdf("figures/silver_model_trace.pdf", width = 8, height = 6)
+stan_trace(silver_fit, nrow = 3, ncol = 4)
+dev.off()
+
+pdf("figures/silver_model_hist.pdf", width = 8, height = 6)
+stan_hist(silver_fit)
+dev.off()
+
+summary(silver_fit)$summary
+```
+
+```{r}
+# Analysis of the Bronze Model
+pdf("figures/bronze_model.pdf", width = 8, height = 6)
+plot(bronze_fit)
+dev.off()
+
+pdf("figures/bronze_model_trace.pdf", width = 8, height = 6)
+stan_trace(bronze_fit, nrow = 3, ncol = 4)
+dev.off()
+
+pdf("figures/bronze_model_hist.pdf", width = 8, height = 6)
+stan_hist(bronze_fit)
+dev.off()
+
+summary(bronze_fit)$summary
+```
+
+
+```{r}
+# Predict the data for 2028 using SLR
+pred_data <- function(data, Country, IsHost) {
+  noc_data = data[data$Country == Country, ]
+  lm.athletes = lm(X.Athletes ~ Year, data = noc_data)
+  summary(lm.athletes)
+  lm.events = lm(X.Events ~ Year, data = noc_data)
+  summary(lm.events)
+  pred = data.frame(
+    Year = 34,
+    log_X.Athletes = log(predict(lm.athletes, newdata = data.frame(Year = 34))),
+    log_X.Events = log(predict(lm.events, newdata = data.frame(Year = 34))),
+    IsHost = IsHost,
+    Country = Country
+  )
+  return(pred)
+}
+```
+
+```{r}
+# Predict the medals for 2028
+predict_for_country <- function(
+  gold_fit, 
+  silver_fit, 
+  bronze_fit,
+  olympics_data,
+  country_id,
+  is_host,
+  country_name = "COUNTRY",
+  figure_root_dir = "figures"
+) {
+  
+  # 1. Predict the data for 2028
+  new_data <- pred_data(olympics_data, country_id, is_host)
+  
+  # 2. Predict the medals using the posterior predictive distribution
+  gold_pred   <- post_pred(gold_fit,   new_data)
+  silver_pred <- post_pred(silver_fit, new_data)
+  bronze_pred <- post_pred(bronze_fit, new_data)
+  
+  # Create the directory for saving figures
+  dir.create(file.path(figure_root_dir, country_name), showWarnings = FALSE, recursive = TRUE)
+  
+  # 3. Plot the posterior predictive distribution
+  save_hist <- function(pred_values, medal_type = "Gold") {
+    pdf_file <- file.path(figure_root_dir, country_name, paste0(tolower(medal_type), "_predictions.pdf"))
+    pdf(pdf_file, width = 8, height = 6)
+    
+    hist(pred_values,
+         main = paste("Predicted", medal_type, "Medals for", country_name, "in 2028"),
+         xlab = paste(medal_type, "Medals"))
+    
+    ci_95 <- quantile(pred_values, probs = c(0.025, 0.975))
+    mean_val <- mean(pred_values)
+    
+    hinfo <- hist(pred_values, plot = FALSE)
+    text(
+      x = max(pred_values) * 0.7,
+      y = max(hinfo$counts) * 0.8,
+      labels = paste0("Mean=", round(mean_val, 0),
+                      "\n95% CI: [", round(ci_95[1], 0), ", ", round(ci_95[2], 0), "]"),
+      col = "blue", cex = 0.9, adj = 0.5
+    )
+    
+    dev.off()
+  }
+  
+  # 4. Plost for each medal type
+  save_hist(gold_pred,   medal_type = "Gold")
+  save_hist(silver_pred, medal_type = "Silver")
+  save_hist(bronze_pred, medal_type = "Bronze")
+  
+  # 5. Return the summary
+  out_list <- list(
+    country = country_name,
+    gold_mean   = mean(gold_pred),
+    gold_ci     = quantile(gold_pred,   c(0.025, 0.975)),
+    silver_mean = mean(silver_pred),
+    silver_ci   = quantile(silver_pred, c(0.025, 0.975)),
+    bronze_mean = mean(bronze_pred),
+    bronze_ci   = quantile(bronze_pred, c(0.025, 0.975))
+  )
+  
+  return(invisible(out_list))
+}
+```
+
+```{r}
+# Predict for USA
+usa_pred <- predict_for_country(
+  gold_fit, 
+  silver_fit, 
+  bronze_fit,
+  olympics,
+  country_id = 1,
+  is_host = 0,
+  country_name = "USA",
+  figure_root_dir = "figures"
 )
-```
 
-```{r}
-# Extract posterior samples
-posterior_samples <- extract(fit)
-alpha_samples <- posterior_samples$alpha[, 1]    # vector of MCMC samples for alpha[c]
-beta_samples  <- posterior_samples$beta          # matrix: iterations × 4 (or list of vectors)
-phi_samples   <- posterior_samples$phi     # vector of MCMC samples for phi
+# Predict for CHN
+chn_pred <- predict_for_country(
+  gold_fit, 
+  silver_fit, 
+  bronze_fit,
+  olympics,
+  country_id = 2,
+  is_host = 0,
+  country_name = "CHN",
+  figure_root_dir = "figures"
+)
 
-# Calculate log(lambda)
-log_lambda <- alpha_samples +
-              beta_samples[,1] +
-              beta_samples[,2] * new_data$log_X.Athletes +
-              beta_samples[,3] * new_data$log_X.Events +
-              beta_samples[,4] * new_data$IsHost
+# Predict for JPN
+gbr_pred <- predict_for_country(
+  gold_fit, 
+  silver_fit, 
+  bronze_fit,
+  olympics,
+  country_id = 3,
+  is_host = 0,
+  country_name = "JPN",
+  figure_root_dir = "figures"
+)
 
-# Calculate lambda
-lambda_pred <- exp(log_lambda)
+# Predict for AUS
+aus_pred <- predict_for_country(
+  gold_fit, 
+  silver_fit, 
+  bronze_fit,
+  olympics,
+  country_id = 4,
+  is_host = 0,
+  country_name = "AUS",
+  figure_root_dir = "figures"
+)
 
-# Generate predictions from Poisson distribution
-set.seed(451)  # for reproducibility
-total_pred <- rnbinom(n = length(lambda_pred), 
-                       size = phi_samples, 
-                       mu = lambda_pred)
-```
-
-```{r}
-# Visualize predictions
-summary(total_pred)
-hist(lambda_pred)
-hist(total_pred)
+# Predict for FRA
+fra_pred <- predict_for_country(
+  gold_fit, 
+  silver_fit, 
+  bronze_fit,
+  olympics,
+  country_id = 5,
+  is_host = 0,
+  country_name = "FRA",
+  figure_root_dir = "figures"
+)
 ```

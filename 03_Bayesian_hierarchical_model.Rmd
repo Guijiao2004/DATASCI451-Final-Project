@@ -345,8 +345,8 @@ predict_for_country <- function(
   # 1. Predict the data for 2028
   new_data <- data.frame(
     Year = 33,
-    log_X.Athletes = log(olympics_data$X.Athletes[olympics_data$Country == country_id]),
-    log_X.Events = log(olympics_data$X.Events[olympics_data$Country == country_id]),
+    log_X.Athletes = log(olympics_data$X.Athletes[olympics_data$Country == country_id]+1),
+    log_X.Events = log(olympics_data$X.Events[olympics_data$Country == country_id]+1),
     IsHost = is_host,
     Country = country_name
   )

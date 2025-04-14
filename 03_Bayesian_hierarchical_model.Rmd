@@ -23,56 +23,70 @@ olympics$log_X.Events <- log(olympics$X.Events + 1)
 ```
 
 ```{r}
-# Histograms for each variable
-hist(olympics$X.Events)
-hist(olympics$X.Athletes)
-```
-```{r}
-pdf("figures/histogram_total_medals.pdf", width = 8, height = 6)
-hist(olympics$Total, 
-     main = "Histogram of Total Medals", 
-     xlab = "Total Medals")
-text(x = max(olympics$Total) * 0.7, 
-     y = max(hist(olympics$Total, plot = FALSE)$counts * 0.8), 
-     labels = paste("Mean =", round(mean(olympics$Total), 2), 
-                    "\nVar =", round(var(olympics$Total), 2)),
-     col = "blue", cex = 0.9, adj = 0)
+# Correlation matrix of the variables
+cor_matrix <- cor(olympics[, c("X.Athletes", "X.Events", "IsHost")])
+
+library(corrplot)
+pdf("figures/correlation_matrix.pdf", width = 8, height = 6)
+
+corrplot(
+  cor_matrix, 
+  method = "color",
+  tl.col = "black",
+  tl.srt = 45,
+  tl.cex = 0.9,
+  tl.offset = 0.8,
+  tl.pos = "lt",
+  title = "Correlation Matrix of Predictive Variables",
+  mar = c(1, 1, 2, 1),
+  addgrid.col = "lightgray",
+  col = colorRampPalette(c("skyblue", "white", "#004D99"))(100),
+  cl.ratio = 0.2,
+  cl.align.text = "c"
+)
 dev.off()
 ```
 ```{r}
-pdf("figures/histogram_gold_medals.pdf", width = 8, height = 6)
+pdf("figures/histogram_medals.pdf", width = 8, height = 8)
+par(mfrow = c(3, 1), mar = c(4, 4, 2, 1))
 hist(olympics$Gold,
-     main = "Histogram of Gold Medals", 
-     xlab = "Gold Medals")
-text(x = max(olympics$Gold) * 0.7,
+     col = "skyblue",
+     border = "white",
+     main = "Gold Medals", 
+     xlab = "Medals Counts",
+     yaxt = "n",
+     ylab = "")
+text(x = max(olympics$Gold) * 0.738,
      y = max(hist(olympics$Gold, plot = FALSE)$counts * 0.8), 
      labels = paste("Mean =", round(mean(olympics$Gold), 2), 
                     "\nVar =", round(var(olympics$Gold), 2)),
-     col = "blue", cex = 0.9, adj = 0)
-dev.off()
-```
-```{r}
-pdf("figures/histogram_silver_medals.pdf", width = 8, height = 6)
+     col = "red", cex = 1.2, adj = 0)
+
 hist(olympics$Silver,
-     main = "Histogram of Silver Medals", 
-     xlab = "Silver Medals")
+     col = "skyblue",
+     border = "white",
+     main = "Silver Medals", 
+     xlab = "Medals Counts",
+     yaxt = "n",
+     ylab = "")
 text(x = max(olympics$Silver) * 0.7,
      y = max(hist(olympics$Silver, plot = FALSE)$counts * 0.8), 
      labels = paste("Mean =", round(mean(olympics$Silver), 2), 
                     "\nVar =", round(var(olympics$Silver), 2)),
-     col = "blue", cex = 0.9, adj = 0)
-dev.off()
-```
-```{r}
-pdf("figures/histogram_bronze_medals.pdf", width = 8, height = 6)
+     col = "red", cex = 1.2, adj = 0)
+
 hist(olympics$Bronze,
-     main = "Histogram of Bronze Medals", 
-     xlab = "Bronze Medals")
-text(x = max(olympics$Bronze) * 0.7,
+     col = "skyblue",
+     border = "white",
+     main = "Bronze Medals", 
+     xlab = "Medals Counts",
+     yaxt = "n",
+     ylab = "")
+text(x = max(olympics$Bronze) * 0.71,
      y = max(hist(olympics$Bronze, plot = FALSE)$counts * 0.8), 
      labels = paste("Mean =", round(mean(olympics$Bronze), 2), 
                     "\nVar =", round(var(olympics$Bronze), 2)),
-     col = "blue", cex = 0.9, adj = 0)
+     col = "red", cex = 1.2, adj = 0)
 dev.off()
 ```
 

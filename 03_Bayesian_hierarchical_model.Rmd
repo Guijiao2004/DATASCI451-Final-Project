@@ -18,6 +18,11 @@ options(mc.cores = 4)
 olympics <- read.csv('01_data_preprocessing/data/olympics.csv')
 head(olympics)
 
+# Held out 2024 Data
+olympics_2024 <- olympics[olympics$Year == 33, ]
+head(olympics_2024)
+olympics <- olympics[olympics$Year != 33, ]
+
 olympics$log_X.Athletes <- log(olympics$X.Athletes + 1)
 olympics$log_X.Events <- log(olympics$X.Events + 1)
 ```
@@ -276,6 +281,7 @@ summary(bronze_fit)$summary
 
 ```{r}
 # Predict the data for 2028 using SLR
+# Not used
 pred_data <- function(data, Country, IsHost) {
   noc_data = data[data$Country == Country, ]
   lm.athletes = lm(X.Athletes ~ Year, data = noc_data)
@@ -294,7 +300,7 @@ pred_data <- function(data, Country, IsHost) {
 ```
 
 ```{r}
-# Predict medals for countries in 2028
+# Predict medals for countries in 2024
 post_pred <- function(fit, new_data) {
   # Extract posterior samples
   posterior_samples <- extract(fit)
@@ -337,7 +343,13 @@ predict_for_country <- function(
 ) {
   
   # 1. Predict the data for 2028
-  new_data <- pred_data(olympics_data, country_id, is_host)
+  new_data <- data.frame(
+    Year = 33,
+    log_X.Athletes = log(olympics_data$X.Athletes[olympics_data$Country == country_id]),
+    log_X.Events = log(olympics_data$X.Events[olympics_data$Country == country_id]),
+    IsHost = is_host,
+    Country = country_name
+  )
   
   # 2. Predict the medals using the posterior predictive distribution
   gold_pred   <- post_pred(gold_fit, new_data)
@@ -353,7 +365,7 @@ predict_for_country <- function(
     pdf(pdf_file, width = 8, height = 6)
     
     plotPost(pred_values, xlab = paste(medal_type, "Medals"),
-             main = paste("Predicted", medal_type, "Medals for", country_name, "in 2028"),
+             main = paste("Predicted", medal_type, "Medals for", country_name, "in 2024"),
              )
     
     dev.off()
@@ -378,11 +390,12 @@ predict_for_country <- function(
 
 ```{r}
 # Predict for USA
+library(bayesboot)
 usa_pred <- predict_for_country(
   gold_fit, 
   silver_fit, 
   bronze_fit,
-  olympics,
+  olympics_2024,
   country_id = 1,
   is_host = 0,
   country_name = "USA",
@@ -394,7 +407,7 @@ chn_pred <- predict_for_country(
   gold_fit, 
   silver_fit, 
   bronze_fit,
-  olympics,
+  olympics_2024,
   country_id = 2,
   is_host = 0,
   country_name = "CHN",
@@ -406,7 +419,7 @@ gbr_pred <- predict_for_country(
   gold_fit, 
   silver_fit, 
   bronze_fit,
-  olympics,
+  olympics_2024,
   country_id = 3,
   is_host = 0,
   country_name = "JPN",
@@ -418,7 +431,7 @@ aus_pred <- predict_for_country(
   gold_fit, 
   silver_fit, 
   bronze_fit,
-  olympics,
+  olympics_2024,
   country_id = 4,
   is_host = 0,
   country_name = "AUS",
@@ -430,9 +443,9 @@ fra_pred <- predict_for_country(
   gold_fit, 
   silver_fit, 
   bronze_fit,
-  olympics,
+  olympics_2024,
   country_id = 5,
-  is_host = 0,
+  is_host = 1,
   country_name = "FRA",
   figure_root_dir = "figures"
 )

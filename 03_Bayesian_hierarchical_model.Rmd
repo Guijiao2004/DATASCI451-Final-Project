@@ -20,6 +20,9 @@ options(mc.cores = 4)
 olympics <- read.csv('01_data_preprocessing/data/olympics.csv')
 head(olympics)
 
+olympics <- olympics |>
+  filter(Year >= 14)
+
 olympics$log_X.Athletes <- log(olympics$X.Athletes + 1)
 olympics$log_X.Events <- log(olympics$X.Events + 1)
 ```
@@ -328,7 +331,7 @@ pred_data <- function(data, Country, IsHost) {
     log_X.Athletes = log(predict(lm.athletes, newdata = data.frame(Year = 34)) + 1),
     #X.Events = predict(lm.events, newdata = data.frame(Year = 34)),
     IsHost = IsHost,
-    Country = Country
+    country_id = Country
   )
   return(pred)
 }
@@ -336,10 +339,10 @@ pred_data <- function(data, Country, IsHost) {
 
 ```{r}
 # Predict medals for countries in 2024
-post_pred <- function(fit, new_data, country_id) {
+post_pred <- function(fit, new_data) {
   # Extract posterior samples
   posterior_samples <- extract(fit)
-  alpha_samples <- posterior_samples$alpha[, country_id]    # vector of MCMC samples for alpha[c]
+  alpha_samples <- posterior_samples$alpha[, new_data$country_id]    # vector of MCMC samples for alpha[c]
   beta_samples  <- posterior_samples$beta          # matrix: iterations × 4 (or list of vectors)
   phi_samples   <- posterior_samples$phi     # vector of MCMC samples for phi
 
@@ -378,19 +381,14 @@ predict_for_country <- function(
 ) {
   
   # 1. Predict the data for 2028
-  new_data <- data.frame(
-    Year = 33,
-    log_X.Athletes = log(olympics_data$X.Athletes[olympics_data$Country == country_id]+1),
-    #log_X.Events = log(olympics_data$X.Events[olympics_data$Country == country_id]+1),
-    IsHost = is_host,
-    Country = country_name
-  )
+  new_data <- pred_data(olympics_data, country_id, is_host)
+
 
   
   # 2. Predict the medals using the posterior predictive distribution
-  gold_pred   <- post_pred(gold_fit, new_data, country_id)
-  silver_pred <- post_pred(silver_fit, new_data, country_id)
-  bronze_pred <- post_pred(bronze_fit, new_data, country_id)
+  gold_pred   <- post_pred(gold_fit, new_data)
+  silver_pred <- post_pred(silver_fit, new_data)
+  bronze_pred <- post_pred(bronze_fit, new_data)
   
   # Create the directory for saving figures
   dir.create(file.path(figure_root_dir, country_name), showWarnings = FALSE, recursive = TRUE)

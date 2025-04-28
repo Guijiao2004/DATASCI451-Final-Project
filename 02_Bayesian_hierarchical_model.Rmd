@@ -337,7 +337,7 @@ dev.off()
 pdf("figures/bronze_model_trace.pdf", width = 8, height = 6)
 bayesplot::mcmc_trace(bronze_fit, 
                 pars = c("alpha[1]", "alpha[2]", "alpha[3]", "alpha[4]", "alpha[5]", "beta[1]", "beta[2]", "beta[3]", "phi"),
-                facet_args = list(ncol = 3)
+                facet_args = list(ncol = 3),
                 )
 dev.off()
 
@@ -401,9 +401,12 @@ predict_2024 <- function(
   save_hist <- function(pred_values, medal_type = "Gold") {
     pdf_file <- file.path("figures", new_data$NOC, paste0(tolower(medal_type), "_predictions.pdf"))
     pdf(pdf_file, width = 8, height = 6)
-    
+
     plotPost(pred_values, xlab = paste(medal_type, "Medals"),
              main = paste("Predicted", medal_type, "Medals for", new_data$NOC, "in 2024"),
+             cex.main = 2.1,
+             font.main = 2,
+             cex.lab = 1.5,
              )
     
     dev.off()
@@ -444,7 +447,7 @@ chn_pred <- predict_2024(
 )
 
 # Predict for JPN
-gbr_pred <- predict_2024(
+jpn_pred <- predict_2024(
   gold_fit, 
   silver_fit, 
   bronze_fit,
@@ -466,4 +469,45 @@ fra_pred <- predict_2024(
   bronze_fit,
   new_data = olympics_2024[olympics_2024$NOC == "FRA", ]
 )
+```
+
+```{r}
+actual_medals <- data.frame(
+  Team = c(
+    "USA",
+    "CHN",
+    "JPN",
+    "AUS",
+    "FRA"
+  ),
+  Gold = c(40, 40, 20, 18, 16),
+  Silver = c(44, 27, 12, 19, 26),
+  Bronze = c(42, 24, 13, 16, 22)
+)
+
+cat("USA:\n")
+1 - mean(usa_pred$gold_pred <= actual_medals$Gold[1] - 5 | usa_pred$gold_pred >= actual_medals$Gold[1] + 5) 
+1 - mean(usa_pred$silver_pred <= actual_medals$Silver[1] - 5 | usa_pred$silver_pred >= actual_medals$Silver[1] + 5)
+1 - mean(usa_pred$bronze_pred <= actual_medals$Bronze[1] - 5 | usa_pred$bronze_pred >= actual_medals$Bronze[1] + 5)
+
+cat("CHN:\n")
+1 - mean(chn_pred$gold_pred <= actual_medals$Gold[2] - 5 | chn_pred$gold_pred >= actual_medals$Gold[2] + 5)
+1 - mean(chn_pred$silver_pred <= actual_medals$Silver[2] - 5 | chn_pred$silver_pred >= actual_medals$Silver[2] + 5)
+1 - mean(chn_pred$bronze_pred <= actual_medals$Bronze[2] - 5 | chn_pred$bronze_pred >= actual_medals$Bronze[2] + 5)
+
+cat("JPN:\n")
+1 - mean(jpn_pred$gold_pred <= actual_medals$Gold[3] - 5 | jpn_pred$gold_pred >= actual_medals$Gold[3] + 5)
+1 - mean(jpn_pred$silver_pred <= actual_medals$Silver[3] - 5 | jpn_pred$silver_pred >= actual_medals$Silver[3] + 5)
+1 - mean(jpn_pred$bronze_pred <= actual_medals$Bronze[3] - 5 | jpn_pred$bronze_pred >= actual_medals$Bronze[3] + 5)
+
+cat("AUS:\n")
+1 - mean(aus_pred$gold_pred <= actual_medals$Gold[4] - 5 | aus_pred$gold_pred >= actual_medals$Gold[4] + 5)
+1 - mean(aus_pred$silver_pred <= actual_medals$Silver[4] - 5 | aus_pred$silver_pred >= actual_medals$Silver[4] + 5)
+1 - mean(aus_pred$bronze_pred <= actual_medals$Bronze[4] - 5 | aus_pred$bronze_pred >= actual_medals$Bronze[4] + 5)
+
+cat("FRA:\n")
+1 - mean(fra_pred$gold_pred <= actual_medals$Gold[5] - 5 | fra_pred$gold_pred >= actual_medals$Gold[5] + 5)
+1 - mean(fra_pred$silver_pred <= actual_medals$Silver[5] - 5 | fra_pred$silver_pred >= actual_medals$Silver[5] + 5)
+1 - mean(fra_pred$bronze_pred <= actual_medals$Bronze[5] - 5 | fra_pred$bronze_pred >= actual_medals$Bronze[5] + 5)
+
 ```

@@ -9,10 +9,9 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
-library(dplyr)
-library(ggplot2)
 library(rstan)
 library(bayesboot)
+library(bayesplot)
 options(mc.cores = 4)
 ```
 
@@ -21,8 +20,6 @@ options(mc.cores = 4)
 olympics <- read.csv('01_data_preprocessing/data/olympics.csv')
 
 olympics$X.Athletes <- log(olympics$X.Athletes + 1)
-# olympics$X.Athletes <- scale(olympics$X.Athletes)
-
 
 # Held out 2024
 olympics_2024 <- olympics[olympics$Year == 2024, ]
@@ -61,7 +58,7 @@ hist(olympics[olympics$Country_id == 5,]$X.Athletes,
 
 ```{r}
 pdf("figures/histogram_medals.pdf", width = 8, height = 8)
-par(mfrow = c(3, 1), mar = c(4, 4, 2, 1))
+par(mfrow = c(3, 1), mar = c(4, 4, 2, 1), cex.main = 2, cex.lab = 1.5)
 hist(olympics$Gold,
      col = "skyblue",
      border = "white",
@@ -73,7 +70,7 @@ text(x = max(olympics$Gold) * 0.738,
      y = max(hist(olympics$Gold, plot = FALSE)$counts * 0.8), 
      labels = paste("Mean =", round(mean(olympics$Gold), 2), 
                     "\nVar =", round(var(olympics$Gold), 2)),
-     col = "red", cex = 1.2, adj = 0)
+     col = "red", cex = 1.5, adj = 0)
 
 hist(olympics$Silver,
      col = "skyblue",
@@ -82,11 +79,11 @@ hist(olympics$Silver,
      xlab = "Medals Counts",
      yaxt = "n",
      ylab = "")
-text(x = max(olympics$Silver) * 0.7,
+text(x = max(olympics$Silver) * 0.78,
      y = max(hist(olympics$Silver, plot = FALSE)$counts * 0.8), 
      labels = paste("Mean =", round(mean(olympics$Silver), 2), 
                     "\nVar =", round(var(olympics$Silver), 2)),
-     col = "red", cex = 1.2, adj = 0)
+     col = "red", cex = 1.5, adj = 0)
 
 hist(olympics$Bronze,
      col = "skyblue",
@@ -99,7 +96,22 @@ text(x = max(olympics$Bronze) * 0.71,
      y = max(hist(olympics$Bronze, plot = FALSE)$counts * 0.8), 
      labels = paste("Mean =", round(mean(olympics$Bronze), 2), 
                     "\nVar =", round(var(olympics$Bronze), 2)),
-     col = "red", cex = 1.2, adj = 0)
+     col = "red", cex = 1.5, adj = 0)
+dev.off()
+```
+
+```{r}
+host_avg <- with(olympics, tapply(Total, IsHost, mean, na.rm = TRUE))
+pdf("figures/IsHost.pdf", width = 6, height = 4)
+
+barplot(host_avg,
+        col       = "skyblue",
+        names.arg = c("0", "1"),
+        main      = "Host vs Non-Host medals",
+        xlab      = "IsHost (0 = No, 1 = Yes)",
+        ylab      = "Average Total Medals",
+        border    = "white")
+
 dev.off()
 ```
 
@@ -122,7 +134,7 @@ parameters {
 model {
   for (c in 1:C) {
     for (y in 1:Y) {
-      Total[c, y] ~ neg_binomial_2_log(1-alpha[c] + beta[1] + beta[2] * N_athletes[c, y] + beta[3] * IsHost[c, y], phi);
+      Total[c, y] ~ neg_binomial_2_log(alpha[c] + beta[1] + beta[2] * N_athletes[c, y] + beta[3] * IsHost[c, y], phi);
     }
   }
   
@@ -224,15 +236,37 @@ bronze_fit <- sampling(object = model,
 ```{r}
 # Analysis of the Gold Model
 pdf("figures/gold_model.pdf", width = 8, height = 6)
-plot(gold_fit)
+bayesplot::mcmc_areas(gold_fit, 
+                pars = c("alpha[1]", "alpha[2]", "alpha[3]", "alpha[4]", "alpha[5]", "beta[1]", "beta[2]", "beta[3]", "phi"),
+                prob = 0.95,
+               )
+dev.off()
+
+pdf("figures/gold_model_alpha.pdf", width = 8, height = 6)
+bayesplot::mcmc_areas(gold_fit, 
+                pars = c("alpha[1]", "alpha[2]", "alpha[3]", "alpha[4]", "alpha[5]"),
+                prob = 0.95,
+               )
+dev.off()
+
+pdf("figures/gold_model_beta.pdf", width = 8, height = 6)
+bayesplot::mcmc_areas(gold_fit, 
+                pars = c("beta[1]", "beta[2]", "beta[3]"),
+                prob = 0.95,
+               )
 dev.off()
 
 pdf("figures/gold_model_trace.pdf", width = 8, height = 6)
-stan_trace(gold_fit, nrow = 3, ncol = 4)
+bayesplot::mcmc_trace(gold_fit, 
+                pars = c("alpha[1]", "alpha[2]", "alpha[3]", "alpha[4]", "alpha[5]", "beta[1]", "beta[2]", "beta[3]", "phi"),
+                facet_args = list(ncol = 3),
+                )
 dev.off()
 
 pdf("figures/gold_model_hist.pdf", width = 8, height = 6)
-stan_hist(gold_fit)
+bayesplot::mcmc_hist(gold_fit, 
+                pars = c("alpha[1]", "alpha[2]", "alpha[3]", "alpha[4]", "alpha[5]", "beta[1]", "beta[2]", "beta[3]", "phi")
+               )
 dev.off()
 
 summary(gold_fit)$summary
@@ -241,15 +275,37 @@ summary(gold_fit)$summary
 ```{r}
 # Analysis of the Silver Model
 pdf("figures/silver_model.pdf", width = 8, height = 6)
-plot(silver_fit)
+bayesplot::mcmc_areas(silver_fit, 
+                pars = c("alpha[1]", "alpha[2]", "alpha[3]", "alpha[4]", "alpha[5]", "beta[1]", "beta[2]", "beta[3]", "phi"),
+                prob = 0.95,
+               )
+dev.off()
+
+pdf("figures/silver_model_alpha.pdf", width = 8, height = 6)
+bayesplot::mcmc_areas(silver_fit, 
+                pars = c("alpha[1]", "alpha[2]", "alpha[3]", "alpha[4]", "alpha[5]"),
+                prob = 0.95,
+               )
+dev.off()
+
+pdf("figures/silver_model_beta.pdf", width = 8, height = 6)
+bayesplot::mcmc_areas(silver_fit, 
+                pars = c("beta[1]", "beta[2]", "beta[3]"),
+                prob = 0.95,
+               )
 dev.off()
 
 pdf("figures/silver_model_trace.pdf", width = 8, height = 6)
-stan_trace(silver_fit, nrow = 3, ncol = 4)
+bayesplot::mcmc_trace(silver_fit, 
+                pars = c("alpha[1]", "alpha[2]", "alpha[3]", "alpha[4]", "alpha[5]", "beta[1]", "beta[2]", "beta[3]", "phi"),
+                facet_args = list(ncol = 3)
+                )
 dev.off()
 
 pdf("figures/silver_model_hist.pdf", width = 8, height = 6)
-stan_hist(silver_fit)
+bayesplot::mcmc_hist(silver_fit, 
+                pars = c("alpha[1]", "alpha[2]", "alpha[3]", "alpha[4]", "alpha[5]", "beta[1]", "beta[2]", "beta[3]", "phi")
+               )
 dev.off()
 
 summary(silver_fit)$summary
@@ -258,15 +314,37 @@ summary(silver_fit)$summary
 ```{r}
 # Analysis of the Bronze Model
 pdf("figures/bronze_model.pdf", width = 8, height = 6)
-plot(bronze_fit)
+bayesplot::mcmc_areas(bronze_fit, 
+                pars = c("alpha[1]", "alpha[2]", "alpha[3]", "alpha[4]", "alpha[5]", "beta[1]", "beta[2]", "beta[3]", "phi"),
+                prob = 0.95,
+               )
+dev.off()
+
+pdf("figures/bronze_model_alpha.pdf", width = 8, height = 6)
+bayesplot::mcmc_areas(bronze_fit, 
+                pars = c("alpha[1]", "alpha[2]", "alpha[3]", "alpha[4]", "alpha[5]"),
+                prob = 0.95,
+               )
+dev.off()
+
+pdf("figures/bronze_model_beta.pdf", width = 8, height = 6)
+bayesplot::mcmc_areas(bronze_fit, 
+                pars = c("beta[1]", "beta[2]", "beta[3]"),
+                prob = 0.95,
+               )
 dev.off()
 
 pdf("figures/bronze_model_trace.pdf", width = 8, height = 6)
-stan_trace(bronze_fit, nrow = 3, ncol = 4)
+bayesplot::mcmc_trace(bronze_fit, 
+                pars = c("alpha[1]", "alpha[2]", "alpha[3]", "alpha[4]", "alpha[5]", "beta[1]", "beta[2]", "beta[3]", "phi"),
+                facet_args = list(ncol = 3)
+                )
 dev.off()
 
 pdf("figures/bronze_model_hist.pdf", width = 8, height = 6)
-stan_hist(bronze_fit)
+bayesplot::mcmc_hist(bronze_fit, 
+                pars = c("alpha[1]", "alpha[2]", "alpha[3]", "alpha[4]", "alpha[5]", "beta[1]", "beta[2]", "beta[3]", "phi")
+               )
 dev.off()
 
 summary(bronze_fit)$summary
